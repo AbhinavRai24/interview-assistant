@@ -157,11 +157,20 @@ export default function Interviewee() {
     }
   }
 
+  // handleUpload receives the AntD file object OR a raw File.
   async function handleUpload({ file }) {
     setUploading(true);
     try {
+      // AntD file object often wraps actual File in originFileObj
+      const actualFile = file && file.originFileObj ? file.originFileObj : file;
+
+      if (!actualFile) {
+        throw new Error("No file provided for upload.");
+      }
+
       const form = new FormData();
-      form.append("resume", file);
+      form.append("resume", actualFile);
+
       const resp = await uploadResume(form);
       // resp: { id, filename, filepath, parsed: { name,email,phone,text } }
       await startNewInterview({
@@ -173,8 +182,18 @@ export default function Interviewee() {
         "Resume uploaded and parsed. Fill missing fields if any and start."
       );
     } catch (err) {
-      console.error(err);
-      message.error("Failed to upload resume.");
+      console.error(
+        "handleUpload error:",
+        err && err.message ? err.message : err
+      );
+
+      if (err && err.message && err.message.toLowerCase().includes("network")) {
+        message.error(
+          "Network error: could not reach backend. Is server running?"
+        );
+      } else {
+        message.error("Failed to upload resume. See console for details.");
+      }
     } finally {
       setUploading(false);
     }
