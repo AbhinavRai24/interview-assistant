@@ -45,55 +45,43 @@ export default function Interviewee() {
   const timerRef = useRef(null);
   const [showWelcome, setShowWelcome] = useState(false);
 
-  // Guard to prevent double submission of the same question (timer + race)
   const submittedQuestionsRef = useRef(new Set());
   const welcomeDismissedRef = useRef(
-    // read persisted value (string 'true' or null)
     (typeof window !== "undefined" &&
       window.localStorage.getItem("welcomeDismissed")) === "true"
   );
 
-  // If there's an in-progress candidate, allow resume
   useEffect(() => {
     const inProg = candidates.find((c) => c.status === "in_progress");
-    // Only show if user hasn't dismissed (persisted across remounts)
     if (inProg && !welcomeDismissedRef.current) {
       setShowWelcome(true);
       setActiveCandidateId(inProg.id);
     }
-  }, []); // unchanged deps (run-once-ish)
-  // keep original behavior
+  }, []);
 
-  // When active candidate changes, set up timer based on current question's startedAt/timeLimit
   useEffect(() => {
     if (!activeCandidateId) return;
     const c = candidates.find((x) => x.id === activeCandidateId);
     if (!c) return;
     const q = (c.questions && c.questions[c.currentQuestionIndex]) || null;
     if (q && c.status === "in_progress") {
-      // compute remaining
       const startedAt = q.startedAt || Date.now();
       const elapsed = Math.floor((Date.now() - startedAt) / 1000);
       const remain = Math.max(0, q.timeLimit - elapsed);
       setRemainingSec(remain);
-      // start interval (clear any existing first)
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = setInterval(() => {
-        // Recompute based on q.startedAt so we don't rely on closure time drifting
         const elapsed2 = Math.floor(
           (Date.now() - (q.startedAt || Date.now())) / 1000
         );
         const r = Math.max(0, q.timeLimit - elapsed2);
         setRemainingSec(r);
         if (r <= 0) {
-          // clear interval to avoid duplicate firings, then auto-submit once
           if (timerRef.current) {
             clearInterval(timerRef.current);
             timerRef.current = null;
           }
-          // Only auto-submit if this question hasn't been submitted yet
           try {
-            // Check latest candidate state before auto-submitting
             const latestCandidate = candidates.find(
               (cc) => cc.id === activeCandidateId
             );
@@ -147,7 +135,6 @@ export default function Interviewee() {
     dispatch(addCandidate(candidate));
     setActiveCandidateId(id);
 
-    // If any fields missing — ask the user via chat UI (we'll prompt inline)
     if (!candidate.name || !candidate.email || !candidate.phone) {
       const missing = [];
       if (!candidate.name) missing.push("name");
@@ -157,11 +144,9 @@ export default function Interviewee() {
     }
   }
 
-  // handleUpload receives the AntD file object OR a raw File.
   async function handleUpload({ file }) {
     setUploading(true);
     try {
-      // AntD file object often wraps actual File in originFileObj
       const actualFile = file && file.originFileObj ? file.originFileObj : file;
 
       if (!actualFile) {
@@ -302,10 +287,8 @@ export default function Interviewee() {
       { difficulty: "hard" },
       { difficulty: "hard" }
     ];
-    // generate first question (we'll generate one by one in real time)
     const idx = 0;
     const out = await generateQuestion(seq[idx].difficulty, idx);
-    // ensure shape: {id, difficulty, text, timeLimit}
     const question = {
       id: out.id || uuidv4(),
       text: out.text,
@@ -330,7 +313,6 @@ export default function Interviewee() {
         message: { role: "ai", text: `Q1: ${question.text}`, ts: Date.now() }
       })
     );
-    // update status to in_progress
     dispatch(setCandidateStatus({ id: candidateId, status: "in_progress" }));
   }
 
@@ -340,8 +322,6 @@ export default function Interviewee() {
     const qIndex = c.currentQuestionIndex;
     const question = c.questions[qIndex];
     if (!question) return;
-
-    // If already submitted (by timer or previous action), skip.
     if (submittedQuestionsRef.current.has(question.id)) {
       console.log(
         "handleSubmitAnswer: already submitted for question",
@@ -349,10 +329,8 @@ export default function Interviewee() {
       );
       return;
     }
-    // Mark as submitted to prevent duplicates
     submittedQuestionsRef.current.add(question.id);
 
-    // clear any running timer to avoid double-submit
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
@@ -360,7 +338,6 @@ export default function Interviewee() {
 
     const candidateMsgText = text || "[no answer]";
 
-    // Avoid appending duplicate consecutive candidate message
     const lastMsg =
       c.chatHistory && c.chatHistory.length
         ? c.chatHistory[c.chatHistory.length - 1]
@@ -384,7 +361,6 @@ export default function Interviewee() {
       console.log("Skipping duplicate chat message append for candidate");
     }
 
-    // evaluate answer via server
     try {
       const evalResp = await evaluateAnswer(question, text || "");
       const updatedQuestions = c.questions.map((qq, i) => {
@@ -406,16 +382,12 @@ export default function Interviewee() {
       console.error(err);
     }
 
-    // This is a critical step: we need to get the most up-to-date candidate
-    // from the store AFTER the dispatch above. Redux updates will reflect on next render.
     const updatedCandidate = candidates.find((cand) => cand.id === c.id);
     const questionsForSummary = updatedCandidate
       ? updatedCandidate.questions
       : c.questions;
 
-    // move to next question or finish
     if (qIndex + 1 >= 6) {
-      // compute final summary
       try {
         const summaryResp = await finalSummary(questionsForSummary);
         dispatch(
@@ -435,7 +407,6 @@ export default function Interviewee() {
         setActiveCandidateId(null);
       }
     } else {
-      // generate next question
       const nextIdx = qIndex + 1;
       const difficulties = ["easy", "easy", "medium", "medium", "hard", "hard"];
       try {
@@ -606,7 +577,6 @@ export default function Interviewee() {
         open={showWelcome}
         onCancel={() => {
           setShowWelcome(false);
-          // persist dismiss so remounts/HMR won't re-open it
           try {
             if (typeof window !== "undefined") {
               window.localStorage.setItem("welcomeDismissed", "true");
@@ -636,7 +606,7 @@ export default function Interviewee() {
             key="resume"
             type="primary"
             onClick={() => {
-              // Resume: close modal but do NOT mark dismissed so it could appear later if you want
+              
               setShowWelcome(false);
             }}
           >
