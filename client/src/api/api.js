@@ -1,6 +1,6 @@
 import axios from "axios";
 const API = axios.create({
-  baseURL: "https://interview-assistant-ynpw.onrender.com",
+  baseURL: "https://interview-assistant-enja.onrender.com/api",
   timeout: 30000
 });
 
