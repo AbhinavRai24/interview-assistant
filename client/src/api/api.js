@@ -1,6 +1,6 @@
 import axios from "axios";
 const API = axios.create({
-  baseURL: "https://interview-assistant-enja.onrender.com/",
+  baseURL: "http://localhost:4000/api",
   timeout: 30000
 });
 
